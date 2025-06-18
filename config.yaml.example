@@ -1,0 +1,31 @@
+storage:
+  protocol: _____
+  host: _____
+  port: _____
+  username: _____
+  password: _____
+  sid: _____
+  input_path: _____
+  output_path: _____
+  overwrite_downloads: false # перезаписывать ли ЭЭГ файлы при загрузке из хранилища
+  overwrite_uploads: false # перезаписывать ли сегменты при загрзке в хранилище
+  create_remote_parents: false # создавать ли несуществующие директории при загрузке в хранилище
+
+database:
+  host: _____
+  port: _____
+  database: _____
+  username: _____
+  password: _____
+
+processing:
+  bandpass_filter: [0.5, 45]
+  notch_filter: [50, 60]
+  segment_min_duration: 1.0 # минимальная длительность сегмента (сек)
+  block_length: 5.0 # длина блока (сек)
+  bad_channel_threshold: 0.8 # порог для "плохих" каналов
+
+hdf5:
+  compression: gzip
+  compression_opts: 4
+  chunks: True
