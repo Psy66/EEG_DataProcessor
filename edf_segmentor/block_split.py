@@ -91,7 +91,8 @@ def create_block_csvs(input_dir=".", output_csv_dir="output_csv", skip_labels=No
         annotations = raw.annotations
         onsets = annotations.onset
         descriptions = annotations.description
-        total_duration = raw.times[-1]
+        # total_duration = raw.times[-1]
+        total_duration = raw.n_times / raw.info["sfreq"]
 
         blocks = []
         i = 0
@@ -137,9 +138,9 @@ def create_block_csvs(input_dir=".", output_csv_dir="output_csv", skip_labels=No
 
 
 def export_blocks(
-        input_dir=".",
-        output_csv_dir="output_csv",
-        output_dir="splitted_blocks",
+    input_dir=".",
+    output_csv_dir="output_csv",
+    output_dir="splitted_blocks",
 ):
     os.makedirs(output_dir, exist_ok=True)
 
@@ -172,14 +173,14 @@ def export_blocks(
                 block_name = row["Название"]
                 start_sec = time_str_to_seconds(row["Время начала"])
                 duration_sec = time_str_to_seconds(row["Длительность"])
-                end_sec = start_sec + duration_sec
+                end_sec = min(start_sec + duration_sec, raw.times[-1])
 
                 raw_block = raw.copy().crop(tmin=start_sec, tmax=end_sec)
                 safe_name = (
                     block_name.replace(" ", "_").replace("(", "").replace(")", "")
                 )
                 out_path = os.path.join(
-                    file_output_dir, f"{i + 1:02d}_{safe_name}_{base_filename}.edf"
+                    file_output_dir, f"{i+1:02d}_{safe_name}_{base_filename}.edf"
                 )
 
                 raw_block.export(
@@ -188,17 +189,16 @@ def export_blocks(
                 print(f"Сохранён блок: {out_path}")
 
 
-def split_edf_into_subblocks(
-        input_dir: str, output_dir: str, min_duration: float = MIN_BLOCK_DURATION
-):
+def split_edf_into_subblocks(input_dir: str, output_dir: str, block_duration: float):
     """
-    Разделяет блоки из папок на подблоки заданной длительности.
-    :param input_dir: Директория, содержащая папки с блоками.
+    Разделяет EDF-файлы на подблоки фиксированной длины. Последний подблок отбрасывается, если он короче block_duration.
+
+    :param input_dir: Директория, содержащая папки с EDF-файлами.
     :param output_dir: Директория для сохранения подблоков.
-    :param min_duration: Минимальная длительность подблока (в секундах).
+    :param block_duration: Длительность каждого подблока (в секундах).
     """
 
-    min_duration = min_duration - 0.002
+    block_duration = block_duration - 0.002
 
     # Создаем выходные директории
     os.makedirs(output_dir, exist_ok=True)
@@ -207,17 +207,16 @@ def split_edf_into_subblocks(
     for folder_name in os.listdir(input_dir):
         folder_path = os.path.join(input_dir, folder_name)
 
-        # Проверяем, что это действительно папка
         if not os.path.isdir(folder_path):
             continue
 
         print(f"Обработка папки: {folder_name}")
 
-        # Создаем выходную директорию для подблоков
+        # Создает выходную директорию для подблоков
         subblocks_folder = os.path.join(output_dir, folder_name)
         os.makedirs(subblocks_folder, exist_ok=True)
 
-        # Перебираем все .edf файлы в папке
+        # Перебираем все .edf файлы в папке.
         for filename in os.listdir(folder_path):
             if not filename.endswith(".edf"):
                 continue
@@ -231,11 +230,11 @@ def split_edf_into_subblocks(
                 print(f"Ошибка при загрузке файла {filename}: {e}")
                 continue
 
-            total_duration = raw.times[-1]  # Общая длительность записи
+            # Общая длительность записи
+            total_duration = raw.n_times / raw.info["sfreq"]
 
-            # Имя базового файла (без расширения)
+            # Имя базового файла без расширения
             base_filename = os.path.splitext(os.path.basename(filename))[0]
-
             print(
                 f"Обработка файла: {filename} (длительность: {total_duration:.2f} сек)"
             )
@@ -244,18 +243,9 @@ def split_edf_into_subblocks(
             current_time = 0
             block_index = 1
 
-            while current_time < total_duration:
-                # Вычисляем время окончания подблока
-                next_time = min(current_time + min_duration, total_duration)
+            while current_time + block_duration <= total_duration:
+                next_time = current_time + block_duration
 
-                subblock_duration = next_time - current_time
-                if subblock_duration < min_duration:
-                    print(
-                        f"Подблок {block_index} слишком короткий ({subblock_duration:.2f} сек) и будет пропущен"
-                    )
-                    break  # Прерываем цикл, так как последний подблок уже обработан
-
-                # Обрезаем данные для подблока
                 try:
                     sub_block = raw.copy().crop(tmin=current_time, tmax=next_time)
                 except ValueError as e:
@@ -273,12 +263,10 @@ def split_edf_into_subblocks(
                     sub_block.export(
                         out_path, fmt="edf", physical_range="auto", overwrite=True
                     )
-                    # sub_block.save(out_path, overwrite=True)
                     print(f"Сохранён подблок: {out_path}")
                 except Exception as e:
                     print(f"Ошибка при экспорте подблока: {e}")
                     break
 
-                # Переходим к следующему подблоку
                 current_time = next_time
                 block_index += 1

@@ -62,12 +62,13 @@ def process_edf(config):
     targets = pd.read_csv("./info_data/prepared/studies.csv")
 
     # В целях тестирования - запускаем только на 5 первых файлах
-    ops_count = 0
+    OPS_COUNT = 0
+    OPS_LINIT = 5
 
     for index, target in targets.iterrows():
-        if ops_count == 5:
+        if OPS_COUNT == OPS_LINIT:
             break
-        ops_count += 1
+        OPS_COUNT += 1
 
         # Получаем путь до файла в облачном хранилище
         remote_filepath = target["file_path"]
@@ -118,7 +119,8 @@ def process_edf(config):
         )
 
         split_edf_into_subblocks(
-            input_dir="./temp/preprocessing/output_blocks", output_dir="./temp/preprocessing/output_subblocks"
+            input_dir="./temp/preprocessing/output_blocks", output_dir="./temp/preprocessing/output_subblocks",
+            block_duration=5.0
         )
 
         # После успешной обработки удаляем исходный файл и промежуточные данные
@@ -139,6 +141,7 @@ def process_edf(config):
         clear_dir(res_path)
 
         logger.info(f"Сегменты загружены")
+
 
 def prepare_dataset(config):
     hdf5_manager = HDF5Manager(base_dir="temp/download_upload/hdf5_output")
@@ -162,5 +165,5 @@ def main(action):
 
 
 if __name__ == "__main__":
-    main("process_edf")
-    # main("prepare_dataset")
+    # main("process_edf")
+    main("prepare_dataset")

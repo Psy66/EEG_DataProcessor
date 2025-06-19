@@ -48,7 +48,7 @@ def edf_split(input_dir="temp/edf/input",
     )
 
     split_edf_into_subblocks(
-        input_dir=output_blocks_dir, output_dir=output_subblocks_dir
+        input_dir=output_blocks_dir, output_dir=output_subblocks_dir, block_duration=5.0
     )
 
     logger.info("Разбиение на блоки завершено")
