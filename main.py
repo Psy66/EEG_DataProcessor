@@ -63,7 +63,7 @@ def process_edf(config):
 
     # В целях тестирования - запускаем только на 5 первых файлах
     OPS_COUNT = 0
-    OPS_LINIT = 5
+    OPS_LINIT = 1
 
     for index, target in targets.iterrows():
         if OPS_COUNT == OPS_LINIT:

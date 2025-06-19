@@ -19,26 +19,25 @@ class HDF5Manager:
     def add_subblocks_to_hdf5(
         self, diagnosis, block_type, patient_id, data, metadata, global_attributes
     ):
-        """
-        Добавляет подблоки в HDF5 файл.
-
-        :param diagnosis: Диагноз пациента (например, "F32").
-        :param block_type: Тип блока (например, "CLOSED_EYES").
-        :param patient_id: Идентификатор пациента (например, "085574").
-        :param data: Данные подблоков (numpy array, shape=(n_blocks, n_channels, n_samples_per_block)).
-        :param metadata: Метаданные пациента (словарь с ключами: gender, age_cat, source_file).
-        :param global_attributes: Глобальные атрибуты файла (диагноз, метка блока, частота дискретизации и т.д.).
-        """
-
-        # Формируем имя файла
         filename = f"{diagnosis}_{block_type}.h5"
         file_path = os.path.join(self.base_dir, filename)
 
-        # Открываем файл в режиме append
         with h5py.File(file_path, "a") as hdf_file:
             if patient_id not in hdf_file:
                 patient_group = hdf_file.create_group(patient_id)
-                patient_group.create_dataset("data", data=data, dtype="float32")
+                maxshape = (
+                    None,
+                    data.shape[1],
+                    data.shape[2],
+                )  # расширяемая первая ось (блоки)
+                dataset = patient_group.create_dataset(
+                    "data",
+                    data=data,
+                    dtype="float32",
+                    compression="gzip",
+                    compression_opts=9,
+                    maxshape=maxshape,
+                )
 
                 metadata_group = patient_group.create_group("metadata")
                 metadata_group.attrs["gender"] = metadata["gender"]
@@ -51,28 +50,21 @@ class HDF5Manager:
                 )
             else:
                 patient_group = hdf_file[patient_id]
+                dataset = patient_group["data"]
 
-                # Обновляем data
-                existing_data = patient_group["data"]
-                new_data = np.concatenate([existing_data[:], data], axis=0)
-                del patient_group["data"]
-                patient_group.create_dataset("data", data=new_data, dtype="float32")
+                old_len = dataset.shape[0]
+                new_len = old_len + data.shape[0]
+                dataset.resize(new_len, axis=0)  # расширяем размер по первой оси
+                dataset[old_len:new_len, :, :] = data  # дозаписываем новые данные
 
-                # Обновляем source_files
                 metadata_group = patient_group["metadata"]
                 source_ds = metadata_group["source_files"]
                 existing_sources = list(source_ds[:])
                 if metadata["source_file"] not in existing_sources:
                     updated_sources = existing_sources + [metadata["source_file"]]
-                    del metadata_group["source_files"]
-                    metadata_group.create_dataset(
-                        "source_files",
-                        data=np.array(updated_sources),
-                        dtype="S100",
-                        maxshape=(None,),
-                    )
+                    source_ds.resize(len(updated_sources), axis=0)
+                    source_ds[:] = updated_sources
 
-            # Обновляем глобальные атрибуты
             for key, value in global_attributes.items():
                 hdf_file.attrs[key] = value
 
