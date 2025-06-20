@@ -10,6 +10,14 @@ from edf_segmentor.edf_split import edf_split, create_block_csvs, export_blocks,
 from edf_preproc.edf_preproc import EdfPreprocessor
 from hdf5.make_h5 import HDF5Manager, process_subblocks
 
+import mne
+
+mne.set_log_level('ERROR')
+
+import warnings
+
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
 CONFIG_PATH = "./config.yaml"
 
 logging.basicConfig(
@@ -101,12 +109,6 @@ def process_edf(config):
             else:
                 logger.info(f"Целостность файла {filename} подтверждена\n")
 
-        # После того, как убедились, что с файлом всё хорошо - начинаем его обработку
-        EDF_PREPROCESSOR.edf_preprocess(
-            edf_file_path=f"{EDF_DOWNLOAD_DIR}/{filename}",
-            output_folder="./temp/preprocessing/cleaned_edf",
-        )
-
         segmentation_config = config["segmentation"]
 
         EDF_DIR = segmentation_config["edf_dir"]
@@ -116,15 +118,56 @@ def process_edf(config):
         BLOCKS_DIR = segmentation_config["blocks_dir"]
         BLOCK_DURATION = segmentation_config["block_duration"]
 
+        # После того, как убедились, что с файлом всё хорошо - начинаем его обработку
+        EDF_PREPROCESSOR.edf_preprocess(
+            edf_file_path=f"{EDF_DOWNLOAD_DIR}/{filename}",
+            output_folder=CLEANED_EDF,
+        )
+
         segmentor = EdfSegmentor(
-            edf_dir=CLEANED_EDF,
-            csv_dir=CSV_DIR,
+            edf_input_dir=EDF_DIR,
+            output_csv_dir=CSV_DIR,
             segments_dir=SEGMENTS_DIR,
-            blocks_dir=BLOCKS_DIR,
+            blocks_output_dir=BLOCKS_DIR,
             block_duration=BLOCK_DURATION
         )
 
-        segmentor.split_edfs_from_edf_input_dir()
+        segmentor.create_segments_and_blocks_from_edf_dir()
+
+        # segmentor.create_block_csvs(
+        #     input_dir="./temp/download_upload/edf_input",
+        #     output_csv_dir="./temp/preprocessing/output_csv",
+        #     skip_labels=None,
+        # )
+        #
+        # segmentor.export_blocks(
+        #     input_dir="./temp/download_upload/edf_input",
+        #     output_csv_dir="./temp/preprocessing/output_csv",
+        #     output_dir="./temp/preprocessing/output_segments"
+        # )
+        #
+        # segmentor.split_edf_into_subblocks(
+        #     input_dir="./temp/preprocessing/output_segments",
+        #     output_dir="./temp/preprocessing/output_blocks",
+        #     block_duration=5.0
+        # )
+
+
+        # create_block_csvs(
+        #     input_dir="./temp/download_upload/edf_input",
+        #     output_csv_dir="./temp/preprocessing/output_csv",
+        #     skip_labels=None,
+        # )
+        #
+        # export_blocks(
+        #     input_dir="./temp/download_upload/edf_input",
+        #     output_csv_dir="./temp/preprocessing/output_csv",
+        #     output_dir="./temp/preprocessing/output_segments")
+        #
+        # split_edf_into_subblocks(
+        #     input_dir="./temp/preprocessing/output_segments", output_dir="./temp/preprocessing/output_blocks",
+        #     block_duration=5.0
+        # )
 
         # После успешной обработки удаляем исходный файл и промежуточные данные
         logger.info(f"Файл {filename} успешно разбит на сегменты...")
