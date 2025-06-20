@@ -8,7 +8,7 @@ import warnings
 
 warnings.filterwarnings(
     "ignore",
-    message="Omitted [0-9]+ annotation\(s\) that were outside data range.",
+    message="Omitted [0-9]+ annotation\\(s\\) that were outside data range.",
     category=RuntimeWarning,
 )
 
@@ -19,6 +19,7 @@ warnings.filterwarnings(
 )
 
 logger = logging.getLogger(__name__)
+
 
 class EdfSegmentor:
     MIN_BLOCK_DURATION = 5.0
@@ -50,29 +51,29 @@ class EdfSegmentor:
         "Разрыв записи",
     }
 
-    def __init__(self, edf_input_dir, output_csv_dir, segments_dir,
+    def __init__(self, edf_input_dir, csv_output_dir, segments_dir,
                  blocks_output_dir, block_duration):
         self.edf_input_dir = edf_input_dir
-        self.output_csv_dir = output_csv_dir
+        self.csv_output_dir = csv_output_dir
         self.segments_dir = segments_dir
         self.blocks_output_dir = blocks_output_dir
         self.block_duration = block_duration
 
     def create_segments_and_blocks_from_edf_dir(self):
-        self.create_block_csvs(
-            input_dir=self.edf_input_dir,
-            output_csv_dir=self.output_csv_dir
+        self.create_segments_csvs(
+            edfs_input_dir=self.edf_input_dir,
+            csv_output_dir=self.csv_output_dir
         )
 
-        self.export_blocks(
-            input_dir=self.edf_input_dir,
-            output_csv_dir=self.output_csv_dir,
-            output_dir=self.segments_dir
+        self.split_edfs_to_segments(
+            edfs_input_dir=self.edf_input_dir,
+            csv_output_dir=self.csv_output_dir,
+            segments_output_dir=self.segments_dir
         )
 
-        self.split_edfs_into_subblocks(
-            input_dir=self.segments_dir,
-            output_dir=self.blocks_output_dir,
+        self.split_segments_to_blocks(
+            segments_input_dir=self.segments_dir,
+            blocks_output_dir=self.blocks_output_dir,
             block_duration=self.block_duration
         )
 
@@ -101,16 +102,16 @@ class EdfSegmentor:
 
         return cleaned_name
 
-    def create_block_csvs(self, input_dir, output_csv_dir):
-        os.makedirs(output_csv_dir, exist_ok=True)
+    def create_segments_csvs(self, edfs_input_dir, csv_output_dir):
+        os.makedirs(csv_output_dir, exist_ok=True)
 
-        for filename in os.listdir(input_dir):
+        for filename in os.listdir(edfs_input_dir):
             if not filename.endswith(".edf"):
                 continue
 
-            self.create_block_csv(input_dir, filename, output_csv_dir)
+            self.create_segment_csv(edfs_input_dir, filename, csv_output_dir)
 
-    def create_block_csv(self, input_dir, filename, output_csv_dir):
+    def create_segment_csv(self, input_dir, filename, output_csv_dir):
         edf_file = os.path.join(input_dir, filename)
         raw = mne.io.read_raw_edf(edf_file, preload=True)
 
@@ -162,16 +163,16 @@ class EdfSegmentor:
 
         logger.info(f"CSV создан: {csv_path}")
 
-    def export_blocks(self, input_dir, output_csv_dir, output_dir):
-        os.makedirs(output_dir, exist_ok=True)
+    def split_edfs_to_segments(self, edfs_input_dir, csv_output_dir, segments_output_dir):
+        os.makedirs(segments_output_dir, exist_ok=True)
 
-        for filename in os.listdir(input_dir):
+        for filename in os.listdir(edfs_input_dir):
             if not filename.endswith(".edf"):
                 continue
 
-            edf_file = os.path.join(input_dir, filename)
+            edf_file = os.path.join(edfs_input_dir, filename)
             base_filename = os.path.splitext(filename)[0]
-            csv_file = os.path.join(output_csv_dir, f"{base_filename}_segments.csv")
+            csv_file = os.path.join(csv_output_dir, f"{base_filename}_segments.csv")
             if not os.path.exists(csv_file):
                 logger.info(f"Пропущен (нет CSV): {filename}")
                 continue
@@ -180,7 +181,7 @@ class EdfSegmentor:
                 logger.info(f"Пропущен (пустой CSV): {csv_file}")
                 continue
 
-            self.export_block(csv_file, edf_file, output_dir, base_filename)
+            self.split_edf_to_segments(csv_file, edf_file, segments_output_dir, base_filename)
 
     def is_csv_empty(self, csv_file):
         with open(csv_file, newline="", encoding="utf-8") as f:
@@ -192,7 +193,7 @@ class EdfSegmentor:
                 return True
             return False
 
-    def export_block(self, csv_file, edf_file, output_dir, base_filename):
+    def split_edf_to_segments(self, csv_file, edf_file, output_dir, base_filename):
         with open(csv_file, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             rows = list(reader)
@@ -221,31 +222,31 @@ class EdfSegmentor:
                 )
                 logger.info(f"Сохранён блок: {out_path}")
 
-    def split_edfs_into_subblocks(self, input_dir: str, output_dir: str, block_duration: float):
+    def split_segments_to_blocks(self, segments_input_dir: str, blocks_output_dir: str, block_duration: float):
         """
         Разделяет EDF-файлы на подблоки фиксированной длины. Последний подблок отбрасывается, если он короче block_duration.
 
-        :param input_dir: Директория, содержащая папки с EDF-файлами.
-        :param output_dir: Директория для сохранения подблоков.
+        :param segments_input_dir: Директория, содержащая папки с EDF-файлами.
+        :param blocks_output_dir: Директория для сохранения подблоков.
         :param block_duration: Длительность каждого подблока (в секундах).
         """
 
         block_duration = block_duration - 0.002
 
         # Создаем выходные директории
-        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(blocks_output_dir, exist_ok=True)
 
         # Перебираем все папки в input_dir
-        for folder_name in os.listdir(input_dir):
-            folder_path = os.path.join(input_dir, folder_name)
+        for folder_name in os.listdir(segments_input_dir):
+            folder_path = os.path.join(segments_input_dir, folder_name)
 
             if not os.path.isdir(folder_path):
                 continue
 
             logger.info(f"Обработка папки: {folder_name}")
-            self.split_edf_into_subblocks(output_dir, folder_name, folder_path, block_duration)
+            self.split_segment_to_blocks(blocks_output_dir, folder_name, folder_path, block_duration)
 
-    def split_edf_into_subblocks(self, output_dir, folder_name, folder_path, block_duration):
+    def split_segment_to_blocks(self, output_dir, folder_name, folder_path, block_duration):
         subblocks_folder = os.path.join(output_dir, folder_name)
 
         # Создает выходную директорию для подблоков

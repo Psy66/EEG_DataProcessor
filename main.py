@@ -126,7 +126,7 @@ def process_edf(config):
 
         segmentor = EdfSegmentor(
             edf_input_dir=EDF_DIR,
-            output_csv_dir=CSV_DIR,
+            csv_output_dir=CSV_DIR,
             segments_dir=SEGMENTS_DIR,
             blocks_output_dir=BLOCKS_DIR,
             block_duration=BLOCK_DURATION

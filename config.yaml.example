@@ -11,6 +11,14 @@ storage:
   overwrite_uploads: false # перезаписывать ли сегменты при загрзке в хранилище
   create_remote_parents: false # создавать ли несуществующие директории при загрузке в хранилище
 
+segmentation:
+  edf_dir: "./temp/download_upload/edf_input"
+  cleaned_edf: "./temp/preprocessing/cleaned_edf"
+  csv_dir: "./temp/preprocessing/output_csv"
+  segments_dir: "./temp/preprocessing/output_segments"
+  blocks_dir: "./temp/preprocessing/output_blocks"
+  block_duration: 5.0
+
 database:
   host: _____
   port: _____
