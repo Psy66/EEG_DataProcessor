@@ -2,6 +2,7 @@ import yaml
 import os
 import logging
 import pandas as pd
+import shutil
 
 from edf_segmentor.EdfSegmentor import EdfSegmentor
 from utils.utils import get_sha256, clear_dir
@@ -39,6 +40,12 @@ def process_edf(config):
     # 3. Примени к нему фильтры
     # 4. Залей в облако
     # 5. Повтори, пока не обработаешь всё
+    # 6. Удалить:
+    #   1. исходный edf
+    #   2. очищенный edf
+    #   3. папку с сегментами (после загрузки)
+    #   4. папку с блоками (после их внесения в h5 файл)
+
 
     EDF_PREPROCESSOR = EdfPreprocessor.from_config(config)
 
@@ -83,6 +90,7 @@ def process_edf(config):
         # Получаем путь до файла в облачном хранилище
         remote_filepath = target["file_path"]
         filename = target["file_name"]
+        base_filename = filename.replace('.edf', '')
 
         if os.path.exists(f"{EDF_DOWNLOAD_DIR}/{filename}") and not OVERWRITE_DOWNLOADS:
             logger.info(
@@ -95,6 +103,7 @@ def process_edf(config):
                 output_dir=EDF_DOWNLOAD_DIR,
                 overwrite=OVERWRITE_DOWNLOADS,
             )
+
             # Проверяем SHA-256
             # Если не совпадает - удаляем загруженный битый файл и идём дальше
             remote_file_sha256 = target["file_checksum"]
@@ -132,62 +141,17 @@ def process_edf(config):
             block_duration=BLOCK_DURATION
         )
 
-        segmentor.create_segments_and_blocks_from_edf_dir()
+        # Путь к файлу с информацией о сегментах .edf файла
+        segments_csv_path = segmentor.create_segment_csv(EDF_DOWNLOAD_DIR, filename, CSV_DIR)
 
-        # segmentor.create_block_csvs(
-        #     input_dir="./temp/download_upload/edf_input",
-        #     output_csv_dir="./temp/preprocessing/output_csv",
-        #     skip_labels=None,
-        # )
-        #
-        # segmentor.export_blocks(
-        #     input_dir="./temp/download_upload/edf_input",
-        #     output_csv_dir="./temp/preprocessing/output_csv",
-        #     output_dir="./temp/preprocessing/output_segments"
-        # )
-        #
-        # segmentor.split_edf_into_subblocks(
-        #     input_dir="./temp/preprocessing/output_segments",
-        #     output_dir="./temp/preprocessing/output_blocks",
-        #     block_duration=5.0
-        # )
+        # Путь к папке с сегментами
+        segments_dir_path = segmentor.split_edf_to_segments(f'{CSV_DIR}/{base_filename}_segments.csv',
+                                                            f'{CLEANED_EDF}/{filename}', SEGMENTS_DIR,
+                                                            base_filename)
 
-
-        # create_block_csvs(
-        #     input_dir="./temp/download_upload/edf_input",
-        #     output_csv_dir="./temp/preprocessing/output_csv",
-        #     skip_labels=None,
-        # )
-        #
-        # export_blocks(
-        #     input_dir="./temp/download_upload/edf_input",
-        #     output_csv_dir="./temp/preprocessing/output_csv",
-        #     output_dir="./temp/preprocessing/output_segments")
-        #
-        # split_edf_into_subblocks(
-        #     input_dir="./temp/preprocessing/output_segments", output_dir="./temp/preprocessing/output_blocks",
-        #     block_duration=5.0
-        # )
-
-        # После успешной обработки удаляем исходный файл и промежуточные данные
-        logger.info(f"Файл {filename} успешно разбит на сегменты...")
-        # os.remove(f'{EDF_DOWNLOAD_DIR}/{filename}')
-        # Очищаем output_csv
-        # clear_dir(EDF_DIR)
-        # clear_dir(CSV_DIR)
-        # clear_dir(CLEANED_EDF)
-        # Очищаем cleaned_edf
-        logger.info(f"Исходный файл {EDF_DOWNLOAD_DIR}/{filename} и промежуточные данные были удалены удалены")
-
-        # Загружаем содержимое папки с сегментами на сервер
-        # res_path = f'temp/preprocessing/output_segments/{filename.replace('.edf', '')}'
-        # synology_api.upload_folder(res_path, f'{OUTPUT_PATH}/{filename.replace('.edf', '')}', True, False)
-
-        # Очищаем локальную папку с сегментами
-        # clear_dir(res_path)
-
-        logger.info(f"Сегменты загружены")
-
+        # Путь к папке с блоками
+        blocks_dir_path = segmentor.split_segment_to_blocks(BLOCKS_DIR, base_filename,
+                                                            f'{SEGMENTS_DIR}/{base_filename}', BLOCK_DURATION)
 
 def prepare_dataset(config):
     hdf5_manager = HDF5Manager(base_dir="temp/download_upload/hdf5_output")

@@ -147,7 +147,7 @@ class EdfSegmentor:
             i = j
 
         base_filename = os.path.splitext(filename)[0]
-        csv_path = os.path.join(output_csv_dir, f"{base_filename}_segments.csv")
+        csv_path = f"{output_csv_dir}/{base_filename}_segments.csv"
 
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
@@ -162,6 +162,7 @@ class EdfSegmentor:
                 )
 
         logger.info(f"CSV создан: {csv_path}")
+        return csv_path
 
     def split_edfs_to_segments(self, edfs_input_dir, csv_output_dir, segments_output_dir):
         os.makedirs(segments_output_dir, exist_ok=True)
@@ -200,7 +201,7 @@ class EdfSegmentor:
 
             raw = mne.io.read_raw_edf(edf_file, preload=True)
 
-            file_output_dir = os.path.join(output_dir, base_filename)
+            file_output_dir = f'{output_dir}/{base_filename}'
             os.makedirs(file_output_dir, exist_ok=True)
 
             for i, row in enumerate(rows):
@@ -213,14 +214,17 @@ class EdfSegmentor:
                 safe_name = (
                     block_name.replace(" ", "_").replace("(", "").replace(")", "")
                 )
-                out_path = os.path.join(
-                    file_output_dir, f"{i + 1:02d}_{safe_name}_{base_filename}.edf"
-                )
+                # out_path = os.path.join(
+                #     file_output_dir, f"{i + 1:02d}_{safe_name}_{base_filename}.edf"
+                # )
+                out_path = f'{file_output_dir}/{i + 1:02d}_{safe_name}_{base_filename}.edf'
 
                 raw_block.export(
                     out_path, fmt="edf", physical_range="auto", overwrite=True
                 )
                 logger.info(f"Сохранён блок: {out_path}")
+
+            return file_output_dir
 
     def split_segments_to_blocks(self, segments_input_dir: str, blocks_output_dir: str, block_duration: float):
         """
@@ -247,10 +251,10 @@ class EdfSegmentor:
             self.split_segment_to_blocks(blocks_output_dir, folder_name, folder_path, block_duration)
 
     def split_segment_to_blocks(self, output_dir, folder_name, folder_path, block_duration):
-        subblocks_folder = os.path.join(output_dir, folder_name)
+        blocks_folder = f'{output_dir}/{folder_name}'
 
         # Создает выходную директорию для подблоков
-        os.makedirs(subblocks_folder, exist_ok=True)
+        os.makedirs(blocks_folder, exist_ok=True)
 
         # Перебираем все .edf файлы в папке.
         for filename in os.listdir(folder_path):
@@ -288,11 +292,8 @@ class EdfSegmentor:
                     logger.info(f"Ошибка при обрезке блока: {e}")
                     break
 
-                # Генерируем имя файла для подблока
-                out_path = os.path.join(
-                    subblocks_folder,
-                    f"{base_filename}_block_{block_index:02d}.edf",
-                )
+                # Генерируем имя файла для блока
+                out_path = f"{blocks_folder}/{base_filename}_block_{block_index:02d}.edf"
 
                 # Сохраняем подблок
                 try:
@@ -306,3 +307,5 @@ class EdfSegmentor:
 
                 current_time = next_time
                 block_index += 1
+
+            return blocks_folder
