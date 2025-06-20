@@ -2,6 +2,8 @@ import yaml
 import os
 import logging
 import pandas as pd
+
+from edf_segmentor.EdfSegmentor import EdfSegmentor
 from utils.utils import get_sha256, clear_dir
 from file_storage.synology_api import SynologyAPI, FileListMode
 from edf_segmentor.edf_split import edf_split, create_block_csvs, export_blocks, split_edf_into_subblocks
@@ -105,40 +107,41 @@ def process_edf(config):
             output_folder="./temp/preprocessing/cleaned_edf",
         )
 
-        # После этого сегментируем файл
-        create_block_csvs(
-            input_dir="./temp/download_upload/edf_input",
-            output_csv_dir="./temp/preprocessing/output_csv",
-            skip_labels=None,
+        segmentation_config = config["segmentation"]
+
+        EDF_DIR = segmentation_config["edf_dir"]
+        CLEANED_EDF = segmentation_config["cleaned_edf"]
+        CSV_DIR = segmentation_config["csv_dir"]
+        SEGMENTS_DIR = segmentation_config["segments_dir"]
+        BLOCKS_DIR = segmentation_config["blocks_dir"]
+        BLOCK_DURATION = segmentation_config["block_duration"]
+
+        segmentor = EdfSegmentor(
+            edf_dir=CLEANED_EDF,
+            csv_dir=CSV_DIR,
+            segments_dir=SEGMENTS_DIR,
+            blocks_dir=BLOCKS_DIR,
+            block_duration=BLOCK_DURATION
         )
 
-        export_blocks(
-            input_dir="./temp/download_upload/edf_input",
-            output_csv_dir="./temp/preprocessing/output_csv",
-            output_dir="./temp/preprocessing/output_blocks"
-        )
-
-        split_edf_into_subblocks(
-            input_dir="./temp/preprocessing/output_blocks", output_dir="./temp/preprocessing/output_subblocks",
-            block_duration=5.0
-        )
+        segmentor.split_edfs_from_edf_input_dir()
 
         # После успешной обработки удаляем исходный файл и промежуточные данные
         logger.info(f"Файл {filename} успешно разбит на сегменты...")
         # os.remove(f'{EDF_DOWNLOAD_DIR}/{filename}')
         # Очищаем output_csv
-        clear_dir("./temp/download_upload/edf_input")
-        clear_dir("./temp/preprocessing/output_csv")
-        clear_dir("./temp/preprocessing/cleaned_edf")
+        # clear_dir(EDF_DIR)
+        # clear_dir(CSV_DIR)
+        # clear_dir(CLEANED_EDF)
         # Очищаем cleaned_edf
         logger.info(f"Исходный файл {EDF_DOWNLOAD_DIR}/{filename} и промежуточные данные были удалены удалены")
 
         # Загружаем содержимое папки с сегментами на сервер
-        res_path = f'./temp/preprocessing/output_blocks/{filename.replace('.edf', '')}'
-        synology_api.upload_folder(res_path, f'{OUTPUT_PATH}/{filename.replace('.edf', '')}', True, False)
+        # res_path = f'temp/preprocessing/output_segments/{filename.replace('.edf', '')}'
+        # synology_api.upload_folder(res_path, f'{OUTPUT_PATH}/{filename.replace('.edf', '')}', True, False)
 
         # Очищаем локальную папку с сегментами
-        clear_dir(res_path)
+        # clear_dir(res_path)
 
         logger.info(f"Сегменты загружены")
 
@@ -147,7 +150,7 @@ def prepare_dataset(config):
     hdf5_manager = HDF5Manager(base_dir="temp/download_upload/hdf5_output")
 
     process_subblocks(
-        subblocks_dir="temp/preprocessing/output_subblocks",
+        subblocks_dir="temp/preprocessing/output_blocks",
         mapping_csv="info_data/original/mapping.csv",
         hdf5_manager=hdf5_manager,
     )
@@ -165,5 +168,5 @@ def main(action):
 
 
 if __name__ == "__main__":
-    # main("process_edf")
-    main("prepare_dataset")
+    main("process_edf")
+    # main("prepare_dataset")

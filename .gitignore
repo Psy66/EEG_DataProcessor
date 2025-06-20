@@ -20,14 +20,14 @@ __pycache__/
 /temp/preprocessing/cleaned_edf/*
 !/temp/preprocessing/cleaned_edf/.gitkeep
 
-/temp/preprocessing/output_blocks/*
-!/temp/preprocessing/output_blocks/.gitkeep
+/temp/preprocessing/output_segments/*
+!/temp/preprocessing/output_segments/.gitkeep
 
 /temp/preprocessing/output_csv/*
 !/temp/preprocessing/output_csv/.gitkeep
 
-/temp/preprocessing/output_subblocks/*
-!/temp/preprocessing/output_subblocks/.gitkeep
+/temp/preprocessing/output_blocks/*
+!/temp/preprocessing/output_blocks/.gitkeep
 
 config.yaml
 
