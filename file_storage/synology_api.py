@@ -44,6 +44,27 @@ class SynologyAPI:
             400: 'Указанный вами параметр(-ы) или операция(-и) запроса не валидны'
         }
 
+    @classmethod
+    def from_config(cls, storage_config):
+
+        synology_base_url = f"{storage_config['protocol']}://{storage_config['host']}:{storage_config['port']}"
+        synology_login = storage_config["username"]
+        synology_password = storage_config["password"]
+
+        sid = storage_config["sid"] if "sid" in storage_config else None
+
+        if sid:
+            synology_api = SynologyAPI(base_url=synology_base_url, sid=sid)
+        else:
+            synology_api = SynologyAPI(
+                base_url=synology_base_url,
+                username=synology_login,
+                password=synology_password,
+            )
+            synology_api.auth()
+
+        return synology_api
+
     def get_api_info(self) -> dict:
         """
         Получает информацию о доступных методах API Synology.

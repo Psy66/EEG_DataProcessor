@@ -16,13 +16,12 @@ class EdfPreprocessor:
         self.bad_channel_threshold = self._validate_fraction(bad_channel_threshold, 'bad_channel_threshold')
 
     @classmethod
-    def from_config(cls, config):
-        processing_config = config.get('processing', {})
+    def from_config(cls, processing_config):
         return cls(
-            bandpass_filter=processing_config.get('bandpass_filter'),
-            notch_filter=processing_config.get('notch_filter'),
-            segment_min_duration=processing_config.get('segment_min_duration', 1.0),
-            bad_channel_threshold=processing_config.get('bad_channel_threshold', 0.8)
+            bandpass_filter=processing_config['bandpass_filter'],
+            notch_filter=processing_config['notch_filter'],
+            segment_min_duration=processing_config['segment_min_duration'],
+            bad_channel_threshold=processing_config['bad_channel_threshold']
         )
 
     @staticmethod

@@ -34,124 +34,76 @@ def get_config():
         return yaml.safe_load(file)
 
 
-def process_edf(config):
-    # 1. Получи "список целей"
-    # 2. Скачай файл-цель из списка
-    # 3. Примени к нему фильтры
-    # 4. Залей в облако
-    # 5. Повтори, пока не обработаешь всё
-    # 6. Удалить:
-    #   1. исходный edf
-    #   2. очищенный edf
-    #   3. папку с сегментами (после загрузки)
-    #   4. папку с блоками (после их внесения в h5 файл)
+def validate_and_download_target_file(api, target, download_dir, overwrite):
+    remote_path = target["file_path"]
+    filename = target["file_name"]
+    expected_sha256 = target["file_checksum"]
+    local_path = f'{download_dir}/{filename}'
+
+    if os.path.exists(local_path) and not overwrite:
+        logger.info(f"Файл {filename} уже существует, пропускаем загрузку.")
+        return local_path, True
+
+    local_path = api.download_file(remote_path, download_dir, overwrite=overwrite)
+    actual_sha256 = get_sha256(local_path)
+
+    if actual_sha256 != expected_sha256:
+        logger.warning(f"Контрольная сумма не совпадает: {filename}. Удаление.")
+        os.remove(local_path)
+        return None, False
+
+    logger.info(f"Файл {filename} успешно загружен и проверен.")
+    return local_path, True
 
 
-    EDF_PREPROCESSOR = EdfPreprocessor.from_config(config)
+def process_single_target(config, target, synology_api, edf_preprocessor):
+    filename = target["file_name"]
+    base_filename = filename.replace('.edf', '')
 
-    EDF_DOWNLOAD_DIR = "temp/download_upload/edf_input"
-    EDF_PROCESSED_DIR = "temp/download_upload/edf_output"
+    edf_download_dir = config['segmentation']['edf_dir']
+    overwrite_on_download = config['storage']['overwrite_downloads']
 
-    storage_config = config["storage"]
+    target_edf_local_path, is_edf_valid = validate_and_download_target_file(synology_api, target, edf_download_dir,
+                                                                            overwrite_on_download)
 
-    OVERWRITE_DOWNLOADS = storage_config["overwrite_downloads"]
-    OVERWRITE_UPLOADS = storage_config["overwrite_uploads"]
-    CREATE_REMOTE_PARENTS = storage_config["create_remote_parents"]
+    if not is_edf_valid:
+        return
 
-    OUTPUT_PATH = storage_config["output_path"]
+    seg_config = config["segmentation"]
 
-    SYNOLOGY_BASE_URL = f"{storage_config['protocol']}://{storage_config['host']}:{storage_config['port']}"
-    SYNOLOGY_LOGIN = storage_config["username"]
-    SYNOLOGY_PASSWORD = storage_config["password"]
+    edf_preprocessor.edf_preprocess(target_edf_local_path, seg_config['cleaned_edf'])
 
-    SID = storage_config["sid"] if "sid" in storage_config else None
+    segmentor = EdfSegmentor(
+        edf_input_dir=seg_config["edf_dir"],
+        csv_output_dir=seg_config["csv_dir"],
+        segments_dir=seg_config["segments_dir"],
+        blocks_output_dir=seg_config["blocks_dir"],
+        block_duration=seg_config["block_duration"]
+    )
 
-    if SID:
-        synology_api = SynologyAPI(base_url=SYNOLOGY_BASE_URL, sid=SID)
-    else:
-        synology_api = SynologyAPI(
-            base_url=SYNOLOGY_BASE_URL,
-            username=SYNOLOGY_LOGIN,
-            password=SYNOLOGY_PASSWORD,
-        )
-        synology_api.auth()
+    segments_csv_path = segmentor.create_segment_csv(edf_download_dir, filename, seg_config["csv_dir"])
+    segments_dir_path = segmentor.split_edf_to_segments(segments_csv_path,
+                                                        f'{seg_config['cleaned_edf']}/{filename}',
+                                                        seg_config["segments_dir"],
+                                                        base_filename)
+    blocks_dir_path = segmentor.split_segment_to_blocks(seg_config["blocks_dir"], base_filename,
+                                                        segments_dir_path, seg_config["block_duration"])
 
-    targets = pd.read_csv("./info_data/prepared/studies.csv")
 
-    # В целях тестирования - запускаем только на 5 первых файлах
-    OPS_COUNT = 0
-    OPS_LINIT = 1
+def process_edfs(config):
+    edf_preprocessor = EdfPreprocessor.from_config(config['processing'])
+    synology_api = SynologyAPI.from_config(config['storage'])
+    targets = pd.read_csv(config['targets']['targets_csv'])
 
-    for index, target in targets.iterrows():
-        if OPS_COUNT == OPS_LINIT:
+    ops_limit = 1  # Временно ограничим для отладки
+    ops_count = 0
+    for i, target in targets.iterrows():
+        if ops_count == ops_limit:
             break
-        OPS_COUNT += 1
+        ops_count += 1
 
-        # Получаем путь до файла в облачном хранилище
-        remote_filepath = target["file_path"]
-        filename = target["file_name"]
-        base_filename = filename.replace('.edf', '')
+        process_single_target(config, target, synology_api, edf_preprocessor)
 
-        if os.path.exists(f"{EDF_DOWNLOAD_DIR}/{filename}") and not OVERWRITE_DOWNLOADS:
-            logger.info(
-                f"Файл {filename} уже существует в директории {EDF_DOWNLOAD_DIR}, отмена загрузки"
-            )
-        else:
-            # Качаем его
-            local_filepath = synology_api.download_file(
-                remote_filepath=remote_filepath,
-                output_dir=EDF_DOWNLOAD_DIR,
-                overwrite=OVERWRITE_DOWNLOADS,
-            )
-
-            # Проверяем SHA-256
-            # Если не совпадает - удаляем загруженный битый файл и идём дальше
-            remote_file_sha256 = target["file_checksum"]
-            local_file_sha256 = get_sha256(local_filepath)
-
-            if remote_file_sha256 != local_file_sha256:
-                logger.warning(
-                    f"Целостность файла {filename}, нарушена. Начинаю удаление..."
-                )
-                os.remove(local_filepath)
-                logger.warning(f"Битый файл {EDF_DOWNLOAD_DIR}/{filename} удалён")
-            else:
-                logger.info(f"Целостность файла {filename} подтверждена\n")
-
-        segmentation_config = config["segmentation"]
-
-        EDF_DIR = segmentation_config["edf_dir"]
-        CLEANED_EDF = segmentation_config["cleaned_edf"]
-        CSV_DIR = segmentation_config["csv_dir"]
-        SEGMENTS_DIR = segmentation_config["segments_dir"]
-        BLOCKS_DIR = segmentation_config["blocks_dir"]
-        BLOCK_DURATION = segmentation_config["block_duration"]
-
-        # После того, как убедились, что с файлом всё хорошо - начинаем его обработку
-        EDF_PREPROCESSOR.edf_preprocess(
-            edf_file_path=f"{EDF_DOWNLOAD_DIR}/{filename}",
-            output_folder=CLEANED_EDF,
-        )
-
-        segmentor = EdfSegmentor(
-            edf_input_dir=EDF_DIR,
-            csv_output_dir=CSV_DIR,
-            segments_dir=SEGMENTS_DIR,
-            blocks_output_dir=BLOCKS_DIR,
-            block_duration=BLOCK_DURATION
-        )
-
-        # Путь к файлу с информацией о сегментах .edf файла
-        segments_csv_path = segmentor.create_segment_csv(EDF_DOWNLOAD_DIR, filename, CSV_DIR)
-
-        # Путь к папке с сегментами
-        segments_dir_path = segmentor.split_edf_to_segments(f'{CSV_DIR}/{base_filename}_segments.csv',
-                                                            f'{CLEANED_EDF}/{filename}', SEGMENTS_DIR,
-                                                            base_filename)
-
-        # Путь к папке с блоками
-        blocks_dir_path = segmentor.split_segment_to_blocks(BLOCKS_DIR, base_filename,
-                                                            f'{SEGMENTS_DIR}/{base_filename}', BLOCK_DURATION)
 
 def prepare_dataset(config):
     hdf5_manager = HDF5Manager(base_dir="temp/download_upload/hdf5_output")
@@ -167,7 +119,7 @@ def main(action):
     config = get_config()
 
     if action == "process_edf":
-        process_edf(config)
+        process_edfs(config)
     elif action == "prepare_dataset":
         prepare_dataset(config)
     else:
