@@ -34,7 +34,7 @@ def get_config():
         return yaml.safe_load(file)
 
 
-def validate_and_download_target_file(api, target, download_dir, overwrite):
+def download_and_validate_target_file(api, target, download_dir, overwrite):
     remote_path = target["file_path"]
     filename = target["file_name"]
     expected_sha256 = target["file_checksum"]
@@ -63,7 +63,7 @@ def process_single_target(config, target, synology_api, edf_preprocessor):
     edf_download_dir = config['segmentation']['edf_dir']
     overwrite_on_download = config['storage']['overwrite_downloads']
 
-    target_edf_local_path, is_edf_valid = validate_and_download_target_file(synology_api, target, edf_download_dir,
+    target_edf_local_path, is_edf_valid = download_and_validate_target_file(synology_api, target, edf_download_dir,
                                                                             overwrite_on_download)
 
     if not is_edf_valid:
@@ -73,13 +73,7 @@ def process_single_target(config, target, synology_api, edf_preprocessor):
 
     edf_preprocessor.edf_preprocess(target_edf_local_path, seg_config['cleaned_edf'])
 
-    segmentor = EdfSegmentor(
-        edf_input_dir=seg_config["edf_dir"],
-        csv_output_dir=seg_config["csv_dir"],
-        segments_dir=seg_config["segments_dir"],
-        blocks_output_dir=seg_config["blocks_dir"],
-        block_duration=seg_config["block_duration"]
-    )
+    segmentor = EdfSegmentor()
 
     segments_csv_path = segmentor.create_segment_csv(edf_download_dir, filename, seg_config["csv_dir"])
     segments_dir_path = segmentor.split_edf_to_segments(segments_csv_path,
@@ -118,7 +112,7 @@ def prepare_dataset(config):
 def main(action):
     config = get_config()
 
-    if action == "process_edf":
+    if action == "process_edfs":
         process_edfs(config)
     elif action == "prepare_dataset":
         prepare_dataset(config)
@@ -127,5 +121,5 @@ def main(action):
 
 
 if __name__ == "__main__":
-    main("process_edf")
+    main("process_edfs")
     # main("prepare_dataset")

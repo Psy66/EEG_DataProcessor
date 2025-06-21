@@ -51,32 +51,6 @@ class EdfSegmentor:
         "Разрыв записи",
     }
 
-    def __init__(self, edf_input_dir, csv_output_dir, segments_dir,
-                 blocks_output_dir, block_duration):
-        self.edf_input_dir = edf_input_dir
-        self.csv_output_dir = csv_output_dir
-        self.segments_dir = segments_dir
-        self.blocks_output_dir = blocks_output_dir
-        self.block_duration = block_duration
-
-    def create_segments_and_blocks_from_edf_dir(self):
-        self.create_segments_csvs(
-            edfs_input_dir=self.edf_input_dir,
-            csv_output_dir=self.csv_output_dir
-        )
-
-        self.split_edfs_to_segments(
-            edfs_input_dir=self.edf_input_dir,
-            csv_output_dir=self.csv_output_dir,
-            segments_output_dir=self.segments_dir
-        )
-
-        self.split_segments_to_blocks(
-            segments_input_dir=self.segments_dir,
-            blocks_output_dir=self.blocks_output_dir,
-            block_duration=self.block_duration
-        )
-
     def seconds_to_min_sec_ms(self, seconds):
         minutes = int(seconds // 60)
         secs = int(seconds % 60)
