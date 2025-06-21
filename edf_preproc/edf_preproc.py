@@ -6,7 +6,9 @@ from edf_preproc.crop_raw_edf import crop_raw_edf
 from edf_preproc.edf_filters import notch_filter, bandpass_filter, sigma_3_filter
 from edf_preproc.ica import ica_filter
 from edf_preproc.min_max_normalisation import min_max_normalisation
+import logging
 
+logger = logging.getLogger(__name__)
 
 class EdfPreprocessor:
     def __init__(self, bandpass_filter=None, notch_filter=None, segment_min_duration=1.0, bad_channel_threshold=0.8):
@@ -54,11 +56,11 @@ class EdfPreprocessor:
         sigma_3_filtered = sigma_3_filter(bandpass_filtered_raw)
 
         # 3. ICA
-        ica_filtered_raw = ica_filter(sigma_3_filtered)
+        # ica_filtered_raw = ica_filter(sigma_3_filtered)
 
         # 4. MinMax нормализация
-        min_max_normalised_raw = min_max_normalisation(ica_filtered_raw)
-        # min_max_normalised_raw = min_max_normalisation(sigma_3_filtered)
+        # min_max_normalised_raw = min_max_normalisation(ica_filtered_raw)
+        min_max_normalised_raw = min_max_normalisation(sigma_3_filtered)
 
         return min_max_normalised_raw
 
@@ -77,4 +79,4 @@ class EdfPreprocessor:
 
         output_path = os.path.join(output_folder, os.path.basename(edf_file_path))
         preprocessed_raw.export(output_path, fmt='edf', overwrite=False)
-        print(f'Файл {os.path.basename(edf_file_path)} предобработан и сохранён: {output_path}')
+        logger.info(f'Файл {os.path.basename(edf_file_path)} предобработан и сохранён: {output_path}')
