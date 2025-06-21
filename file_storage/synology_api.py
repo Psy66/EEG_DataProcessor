@@ -25,6 +25,7 @@ def requires_auth(method):
 class FileListMode(Enum):
     SHORT = 'short'
     FULL = 'full'
+    DIR = 'dir'
 
 
 # Написан в соответствии с документацией и опытом использования Synology File Station API
@@ -179,6 +180,8 @@ class SynologyAPI:
                 return files
             elif mode == FileListMode.SHORT:
                 return [file.get('path') for file in files]
+            elif mode == FileListMode.DIR:
+                return [file.get('path') for file in files if file.get('isdir')]
             else:
                 raise ValueError(f'Недопустимый режим: {mode}')
 
@@ -323,9 +326,9 @@ class SynologyAPI:
             # blSkip == true - что невозможна
             is_writing_allowed = not data['data']['blSkip']
             if is_writing_allowed:
-                print(f'Запись файла {filename} в директорию {remote_dir_path} возможна')
+                logger.info(f'Запись файла {filename} в директорию {remote_dir_path} возможна')
             else:
-                print(f'Запись файла {filename} в директорию {remote_dir_path} невозможна')
+                logger.info(f'Запись файла {filename} в директорию {remote_dir_path} невозможна')
 
             return is_writing_allowed
 
@@ -363,19 +366,19 @@ class SynologyAPI:
             files_list = self.get_files_list(remote_dir_path)
         except PermissionError:
             if not create_parents:
-                print(
+                logger.warning(
                     f'Целевая указанная директоия {remote_dir_path} не существует. Невозможно загрузить файл {filename}. '
                     f'Для создания несуществующих директорий укажите create_parents=True')
                 return False
 
         # Затем проверяем существование файла. Если он есть, а overwrite = False - ошибка
         if full_remote_path in files_list and not overwrite:
-            print(f'Файл {filename} уже существует в директории {remote_dir_path}. Загрузка отменена.'
+            logger.warning(f'Файл {filename} уже существует в директории {remote_dir_path}. Загрузка отменена.'
                   f'Для перезаписи существующих файлов укажите overwrite=True')
             return False
 
         if not os.path.isfile(local_file_path):
-            print(f'Локальный файл {local_file_path} не найден. Загрузка отменена')
+            logger.warning(f'Локальный файл {local_file_path} не найден. Загрузка отменена')
             return False
 
         url = f'{self._base_url}/webapi/entry.cgi'
@@ -409,9 +412,9 @@ class SynologyAPI:
             # blSkip == true - что запись отменена (возможно, файл уже существует)
             is_writing_succeed = not data['data']['blSkip']
             if is_writing_succeed:
-                print(f'Файл {filename} успешно загружен в директорию {remote_dir_path}')
+                logger.info(f'Файл {filename} успешно загружен в директорию {remote_dir_path}')
             else:
-                print(f'Загрузка {filename} в директорию {remote_dir_path} не удалась')
+                logger.warning(f'Загрузка {filename} в директорию {remote_dir_path} не удалась')
 
             return is_writing_succeed
 

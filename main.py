@@ -60,8 +60,11 @@ def process_single_target(config, target, synology_api, edf_preprocessor):
     filename = target["file_name"]
     base_filename = filename.replace('.edf', '')
 
-    edf_download_dir = config['segmentation']['edf_dir']
-    overwrite_on_download = config['storage']['overwrite_downloads']
+    seg_config = config["segmentation"]
+    storage_config = config["storage"]
+
+    edf_download_dir = seg_config['edf_dir']
+    overwrite_on_download = storage_config['overwrite_downloads']
 
     target_edf_local_path, is_edf_valid = download_and_validate_target_file(synology_api, target, edf_download_dir,
                                                                             overwrite_on_download)
@@ -69,9 +72,7 @@ def process_single_target(config, target, synology_api, edf_preprocessor):
     if not is_edf_valid:
         return
 
-    seg_config = config["segmentation"]
-
-    edf_preprocessor.edf_preprocess(target_edf_local_path, seg_config['cleaned_edf'])
+    cleaned_edf_path = edf_preprocessor.edf_preprocess(target_edf_local_path, seg_config['cleaned_edf'])
 
     segmentor = EdfSegmentor()
 
@@ -80,8 +81,25 @@ def process_single_target(config, target, synology_api, edf_preprocessor):
                                                         f'{seg_config['cleaned_edf']}/{filename}',
                                                         seg_config["segments_dir"],
                                                         base_filename)
-    blocks_dir_path = segmentor.split_segment_to_blocks(seg_config["blocks_dir"], base_filename,
-                                                        segments_dir_path, seg_config["block_duration"])
+
+    storage_output_path = f'{storage_config['output_path']}/{base_filename}'
+    logger.info(f'Загружаем сегменты {segments_dir_path} в {storage_output_path}')
+
+    synology_api.upload_folder(segments_dir_path, storage_output_path, storage_config['create_remote_parents'],
+                               storage_config['overwrite_uploads'])
+
+    logger.info(f'Загрузка в {storage_output_path} завершена')
+
+    logger.info(f'Очищаем служебные файлы')
+
+    # Удаляем cleaned_edf
+    # Удаляем output_csv
+    # Удаляем output_segments
+    os.remove(cleaned_edf_path)
+    os.remove(segments_csv_path)
+    shutil.rmtree(segments_dir_path)
+
+    logger.info(f'Служебные файлы очищены. Обработка {filename} завершена')
 
 
 def process_edfs(config):
@@ -89,12 +107,19 @@ def process_edfs(config):
     synology_api = SynologyAPI.from_config(config['storage'])
     targets = pd.read_csv(config['targets']['targets_csv'])
 
+    processed_files = synology_api.get_files_list(config['storage']['output_path'], FileListMode.DIR)
+
     ops_limit = 1  # Временно ограничим для отладки
     ops_count = 0
     for i, target in targets.iterrows():
         if ops_count == ops_limit:
             break
         ops_count += 1
+
+        storage_dir_path = f'{config['storage']['output_path']}/{target["file_name"].replace('.edf', '')}'
+        if storage_dir_path in processed_files:
+            logger.info(f'Файл {target["file_name"]} уже имеет директорию в хранилище {storage_dir_path}. Обработка пропущена.')
+            continue
 
         process_single_target(config, target, synology_api, edf_preprocessor)
 
@@ -107,6 +132,10 @@ def prepare_dataset(config):
         mapping_csv="info_data/original/mapping.csv",
         hdf5_manager=hdf5_manager,
     )
+
+    # segmentor = EdfSegmentor()
+    # blocks_dir_path = segmentor.split_segment_to_blocks(seg_config["blocks_dir"], base_filename,
+    #                                                     segments_dir_path, seg_config["block_duration"])
 
 
 def main(action):

@@ -77,6 +77,8 @@ class EdfPreprocessor:
         raw = mne.io.read_raw_edf(edf_file_path, preload=True)
         preprocessed_raw = self.preprocess_raw(raw)
 
-        output_path = os.path.join(output_folder, os.path.basename(edf_file_path))
+        output_path = f'{output_folder}/{os.path.basename(edf_file_path)}'
         preprocessed_raw.export(output_path, fmt='edf', overwrite=False)
         logger.info(f'Файл {os.path.basename(edf_file_path)} предобработан и сохранён: {output_path}')
+
+        return output_path
