@@ -56,11 +56,11 @@ class EdfPreprocessor:
         sigma_3_filtered = sigma_3_filter(bandpass_filtered_raw)
 
         # 3. ICA
-        # ica_filtered_raw = ica_filter(sigma_3_filtered)
+        ica_filtered_raw = ica_filter(sigma_3_filtered)
 
         # 4. MinMax нормализация
-        # min_max_normalised_raw = min_max_normalisation(ica_filtered_raw)
-        min_max_normalised_raw = min_max_normalisation(sigma_3_filtered)
+        min_max_normalised_raw = min_max_normalisation(ica_filtered_raw)
+        # min_max_normalised_raw = min_max_normalisation(sigma_3_filtered)
 
         return min_max_normalised_raw
 
