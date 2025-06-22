@@ -38,6 +38,8 @@ processing:
   segment_min_duration: 1.0 # минимальная длительность сегмента (сек)
   block_length: 5.0 # длина блока (сек)
   bad_channel_threshold: 0.8 # порог для "плохих" каналов
+  limit_file_size: true # включает ограничение на размер обрабатываемого файла
+  file_size_limit_mb: 730 # максимальный размер файла в MB
 
 hdf5:
   compression: gzip

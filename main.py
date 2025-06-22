@@ -59,11 +59,7 @@ def download_and_validate_target_file(api, target, download_dir, overwrite):
         logger.info(f"Файл {filename} уже существует, пропускаем загрузку.")
         return local_path, True
 
-    try:
-        local_path = api.download_file(remote_path, download_dir, overwrite=overwrite)
-    except FileNotFoundError as e:
-        logger.info(e)
-        return None, False
+    local_path = api.download_file(remote_path, download_dir, overwrite=overwrite)
 
     actual_sha256 = get_sha256(local_path)
 
@@ -128,12 +124,23 @@ def process_single_target(config, target, synology_api, edf_preprocessor):
     logger.info(f'Служебные файлы очищены. Обработка {filename} завершена')
 
 
+def get_file_size_mb(file_list, target_name):
+    for file in file_list:
+        if file['name'] == target_name:
+            size_bytes = file['additional']['size']
+            size_mb = size_bytes / (1024 * 1024)
+            return round(size_mb, 2)
+
+
 def process_edfs(config):
     edf_preprocessor = EdfPreprocessor.from_config(config['processing'])
     synology_api = SynologyAPI.from_config(config['storage'])
     targets = pd.read_csv(config['targets']['targets_csv'])
 
     targets_len = targets.shape[0]
+
+    total_storage_files_full = synology_api.get_files_list(config['storage']['input_path'], FileListMode.FULL)
+    total_storage_files_short = synology_api.get_files_list(config['storage']['input_path'], FileListMode.SHORT)
 
     processed_files = synology_api.get_files_list(config['storage']['output_path'], FileListMode.DIR)
     unprocessed_files = [
@@ -145,16 +152,21 @@ def process_edfs(config):
     unprocessed_files_len = len(unprocessed_files)
 
     logger.info(
-        f"На данный момент обработано {processed_files_len} из {targets_len} файлов, осталось {unprocessed_files_len}"
+        f"На данный момент обработано {processed_files_len} из {targets_len} записей, осталось {unprocessed_files_len}"
     )
 
     ops_limit = 7  # Временно ограничим для отладки
     ops_count = 0
-    processed_files_count = 0
     for i, target in targets.iterrows():
         if ops_count == ops_limit:
             break
         ops_count += 1
+
+        target_file_in_storage = f'{config['storage']['input_path']}/{target["file_name"]}'
+        if target_file_in_storage not in total_storage_files_short:
+            logger.info(
+                f'Файл {target["file_name"]} не найден по ожидаемому пути {target_file_in_storage}. Обработка пропущена.')
+            continue
 
         storage_dir_path = f'{config['storage']['output_path']}/{target["file_name"].replace('.edf', '')}'
         if storage_dir_path in processed_files:
@@ -162,11 +174,17 @@ def process_edfs(config):
                 f'Файл {target["file_name"]} уже имеет директорию в хранилище {storage_dir_path}. Обработка пропущена.')
             continue
 
+        conf_proc = config['processing']
+        file_size_mb = get_file_size_mb(total_storage_files_full, target['file_name'])
+        if conf_proc['limit_file_size'] and file_size_mb > conf_proc['file_size_limit_mb']:
+            logger.info(
+                f'Размер файла {target["file_name"]} ({file_size_mb} MB) превышает установленный лимит {conf_proc['file_size_limit_mb']} MB. Обработка пропущена.')
+            continue
+
         process_single_target(config, target, synology_api, edf_preprocessor)
-        processed_files_count += 1
 
         logger.info(
-            f"Обработано {processed_files_len + processed_files_count} из {targets_len} файлов, осталось {unprocessed_files_len - processed_files_count}"
+            f"Обработано/просмотрено {processed_files_len + ops_count} из {targets_len} записей, осталось {unprocessed_files_len - ops_count}"
         )
 
     logger.info('Обработка и загрузка сегментов завершена!')
