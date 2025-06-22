@@ -59,7 +59,12 @@ def download_and_validate_target_file(api, target, download_dir, overwrite):
         logger.info(f"Файл {filename} уже существует, пропускаем загрузку.")
         return local_path, True
 
-    local_path = api.download_file(remote_path, download_dir, overwrite=overwrite)
+    try:
+        local_path = api.download_file(remote_path, download_dir, overwrite=overwrite)
+    except FileNotFoundError as e:
+        logger.info(e)
+        return None, False
+
     actual_sha256 = get_sha256(local_path)
 
     if actual_sha256 != expected_sha256:
@@ -67,7 +72,7 @@ def download_and_validate_target_file(api, target, download_dir, overwrite):
         os.remove(local_path)
         return None, False
 
-    logger.info(f"Файл {filename} успешно загружен и проверен.")
+    logger.info(f"Файл {filename} успешно проверен на целостность.")
     return local_path, True
 
 
@@ -111,9 +116,11 @@ def process_single_target(config, target, synology_api, edf_preprocessor):
 
     logger.info(f'Очищаем служебные файлы')
 
+    # Удаляем исходный edf файл
     # Удаляем cleaned_edf
     # Удаляем output_csv
     # Удаляем output_segments
+    os.remove(target_edf_local_path)
     os.remove(cleaned_edf_path)
     os.remove(segments_csv_path)
     shutil.rmtree(segments_dir_path)
@@ -126,10 +133,24 @@ def process_edfs(config):
     synology_api = SynologyAPI.from_config(config['storage'])
     targets = pd.read_csv(config['targets']['targets_csv'])
 
-    processed_files = synology_api.get_files_list(config['storage']['output_path'], FileListMode.DIR)
+    targets_len = targets.shape[0]
 
-    ops_limit = 3  # Временно ограничим для отладки
+    processed_files = synology_api.get_files_list(config['storage']['output_path'], FileListMode.DIR)
+    unprocessed_files = [
+        target for _, target in targets.iterrows()
+        if f'{config["storage"]["output_path"]}/{target["file_name"].replace(".edf", "")}' not in processed_files
+    ]
+
+    processed_files_len = len(processed_files)
+    unprocessed_files_len = len(unprocessed_files)
+
+    logger.info(
+        f"На данный момент обработано {processed_files_len} из {targets_len} файлов, осталось {unprocessed_files_len}"
+    )
+
+    ops_limit = 7  # Временно ограничим для отладки
     ops_count = 0
+    processed_files_count = 0
     for i, target in targets.iterrows():
         if ops_count == ops_limit:
             break
@@ -142,6 +163,11 @@ def process_edfs(config):
             continue
 
         process_single_target(config, target, synology_api, edf_preprocessor)
+        processed_files_count += 1
+
+        logger.info(
+            f"Обработано {processed_files_len + processed_files_count} из {targets_len} файлов, осталось {unprocessed_files_len - processed_files_count}"
+        )
 
     logger.info('Обработка и загрузка сегментов завершена!')
 
