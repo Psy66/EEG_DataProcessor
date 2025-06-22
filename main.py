@@ -5,6 +5,7 @@ from datetime import datetime
 import pandas as pd
 import shutil
 
+import sys
 from edf_segmentor.EdfSegmentor import EdfSegmentor
 from utils.utils import get_sha256, clear_dir
 from file_storage.synology_api import SynologyAPI, FileListMode
@@ -43,7 +44,17 @@ def setup_logger():
         ]
     )
 
-    return logging.getLogger(__name__)
+    logger = logging.getLogger(__name__)
+
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+        logger.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+    sys.excepthook = handle_exception
+
+    return logger
 
 
 logger = setup_logger()
