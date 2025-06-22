@@ -9,7 +9,10 @@ storage:
   output_path: _____
   overwrite_downloads: false # перезаписывать ли ЭЭГ файлы при загрузке из хранилища
   overwrite_uploads: false # перезаписывать ли сегменты при загрзке в хранилище
-  create_remote_parents: false # создавать ли несуществующие директории при загрузке в хранилище
+  create_remote_parents: true # создавать ли несуществующие директории при загрузке в хранилище
+
+logging:
+  logs_dir: "./temp/logs"
 
 segmentation:
   edf_dir: "./temp/download_upload/edf_input"
@@ -18,6 +21,9 @@ segmentation:
   segments_dir: "./temp/preprocessing/output_segments"
   blocks_dir: "./temp/preprocessing/output_blocks"
   block_duration: 5.0
+
+targets:
+  targets_csv: "./info_data/prepared/studies.csv"
 
 database:
   host: _____

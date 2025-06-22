@@ -29,6 +29,9 @@ __pycache__/
 /temp/preprocessing/output_blocks/*
 !/temp/preprocessing/output_blocks/.gitkeep
 
+/temp/logs/*
+!/temp/logs/.gitkeep
+
 config.yaml
 
 *.edf

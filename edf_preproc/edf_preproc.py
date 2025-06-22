@@ -53,10 +53,11 @@ class EdfPreprocessor:
         notch_filtered_raw = notch_filter(cropped_raw, self.notch_filter_freqs)
         bandpass_filtered_raw = bandpass_filter(notch_filtered_raw, l_freq=self.bandpass_filter[0],
                                                 h_freq=self.bandpass_filter[1])
-        sigma_3_filtered = sigma_3_filter(bandpass_filtered_raw)
+        # sigma_3_filtered = sigma_3_filter(bandpass_filtered_raw)
 
         # 3. ICA
-        ica_filtered_raw = ica_filter(sigma_3_filtered)
+        # ica_filtered_raw = ica_filter(sigma_3_filtered)
+        ica_filtered_raw = ica_filter(bandpass_filtered_raw)
 
         # 4. MinMax нормализация
         min_max_normalised_raw = min_max_normalisation(ica_filtered_raw)

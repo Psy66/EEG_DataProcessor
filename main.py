@@ -1,6 +1,7 @@
 import yaml
 import os
 import logging
+from datetime import datetime
 import pandas as pd
 import shutil
 
@@ -12,26 +13,40 @@ from edf_preproc.edf_preproc import EdfPreprocessor
 from hdf5.make_h5 import HDF5Manager, process_subblocks
 
 import mne
-
-mne.set_log_level('ERROR')
-
 import warnings
 
+mne.set_log_level('ERROR')
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-CONFIG_PATH = "./config.yaml"
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(asctime)s] %(levelname)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-logger = logging.getLogger(__name__)
+config_path = "./config.yaml"
 
 
 def get_config():
-    with open(CONFIG_PATH, "r", encoding="utf-8") as file:
+    with open(config_path, "r", encoding="utf-8") as file:
         return yaml.safe_load(file)
+
+
+def setup_logger():
+    config = get_config()
+    logs_dir = config['logging']['logs_dir']
+
+    log_filename = datetime.now().strftime(f"{logs_dir}/log_%Y-%m-%d__%H-%M-%S.log")
+
+    # Настройка логгера
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s] %(levelname)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=[
+            logging.FileHandler(log_filename, encoding="utf-8"),
+            logging.StreamHandler()
+        ]
+    )
+
+    return logging.getLogger(__name__)
+
+
+logger = setup_logger()
 
 
 def download_and_validate_target_file(api, target, download_dir, overwrite):
@@ -72,8 +87,11 @@ def process_single_target(config, target, synology_api, edf_preprocessor):
     if not is_edf_valid:
         return
 
+    logger.info(f'Начинаем обработку файла {filename}')
     cleaned_edf_path = edf_preprocessor.edf_preprocess(target_edf_local_path, seg_config['cleaned_edf'])
+    logger.info(f'Обработка файла {filename} завершена')
 
+    logger.info(f'Начинаем сегментацию файла {filename}')
     segmentor = EdfSegmentor()
 
     segments_csv_path = segmentor.create_segment_csv(edf_download_dir, filename, seg_config["csv_dir"])
@@ -81,6 +99,7 @@ def process_single_target(config, target, synology_api, edf_preprocessor):
                                                         f'{seg_config['cleaned_edf']}/{filename}',
                                                         seg_config["segments_dir"],
                                                         base_filename)
+    logger.info(f'Сегментация файла {filename} завершена')
 
     storage_output_path = f'{storage_config['output_path']}/{base_filename}'
     logger.info(f'Загружаем сегменты {segments_dir_path} в {storage_output_path}')
@@ -109,7 +128,7 @@ def process_edfs(config):
 
     processed_files = synology_api.get_files_list(config['storage']['output_path'], FileListMode.DIR)
 
-    ops_limit = 1  # Временно ограничим для отладки
+    ops_limit = 3  # Временно ограничим для отладки
     ops_count = 0
     for i, target in targets.iterrows():
         if ops_count == ops_limit:
@@ -118,10 +137,13 @@ def process_edfs(config):
 
         storage_dir_path = f'{config['storage']['output_path']}/{target["file_name"].replace('.edf', '')}'
         if storage_dir_path in processed_files:
-            logger.info(f'Файл {target["file_name"]} уже имеет директорию в хранилище {storage_dir_path}. Обработка пропущена.')
+            logger.info(
+                f'Файл {target["file_name"]} уже имеет директорию в хранилище {storage_dir_path}. Обработка пропущена.')
             continue
 
         process_single_target(config, target, synology_api, edf_preprocessor)
+
+    logger.info('Обработка и загрузка сегментов завершена!')
 
 
 def prepare_dataset(config):
