@@ -282,4 +282,4 @@ class EdfSegmentor:
                 current_time = next_time
                 block_index += 1
 
-            return blocks_folder
+        return blocks_folder

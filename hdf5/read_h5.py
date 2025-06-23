@@ -35,9 +35,9 @@ def explore_data_blocks(file_path):
     print(f"\nExploring data blocks in: {file_path}")
 
     with h5py.File(file_path, "r") as f:
-        for patient_id in f:
-            group = f[patient_id]
-            print(f"\nPatient ID: {patient_id}")
+        for source_file_id in f:
+            group = f[source_file_id]
+            print(f"\nSource file: {source_file_id}")
 
             # Данные
             data = group.get("data")

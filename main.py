@@ -11,7 +11,7 @@ from utils.utils import get_sha256, clear_dir
 from file_storage.synology_api import SynologyAPI, FileListMode
 from edf_segmentor.edf_split import edf_split, create_block_csvs, export_blocks, split_edf_into_subblocks
 from edf_preproc.edf_preproc import EdfPreprocessor
-from hdf5.make_h5 import HDF5Manager, process_subblocks
+from hdf5.make_h5 import HDF5Manager, process_blocks
 
 import mne
 import warnings
@@ -166,7 +166,7 @@ def process_edfs(config):
         f"На данный момент обработано {processed_files_len} из {targets_len} записей, осталось {unprocessed_files_len}"
     )
 
-    ops_limit = 7  # Временно ограничим для отладки
+    ops_limit = 5  # Временно ограничим для отладки
     ops_count = 0
     for i, target in targets.iterrows():
         if ops_count == ops_limit:
@@ -202,13 +202,70 @@ def process_edfs(config):
 
 
 def prepare_dataset(config):
-    hdf5_manager = HDF5Manager(base_dir="temp/download_upload/hdf5_output")
+    synology_api = SynologyAPI.from_config(config['storage'])
 
-    process_subblocks(
-        subblocks_dir="temp/preprocessing/output_blocks",
-        mapping_csv="info_data/original/mapping.csv",
-        hdf5_manager=hdf5_manager,
-    )
+    storage_config = config['storage']
+    output_path = storage_config['output_path']
+    overwrite_downloads = storage_config['overwrite_downloads']
+
+    seg_config = config['segmentation']
+    segments_dir = seg_config['segments_dir']
+    blocks_dir = seg_config['blocks_dir']
+    block_duration = seg_config['block_duration']
+    hdf5_dir = seg_config['hdf5_dir']
+
+    remote_target_paths = synology_api.get_files_list(output_path, FileListMode.DIR)
+    total_dirs = len(remote_target_paths)
+
+    logger.info(
+        f'В директории {output_path} было найдено {len(remote_target_paths)} директорий с сегментами')
+
+    ops_limit = 5  # Временно ограничим для отладки
+    ops_count = 0
+    for remote_target_path in remote_target_paths:
+        if ops_count == ops_limit:
+            break
+        ops_count += 1
+
+        segments_dir_base_name = os.path.basename(remote_target_path)
+        segments_local_path = f'{segments_dir}/{segments_dir_base_name}'
+
+        if os.path.exists(segments_local_path):
+            logger.info(f"Директория {segments_local_path} уже существует локально. Пропускаем скачивание.")
+        else:
+            synology_api.download_folder(segments_local_path, remote_target_path,
+                                         overwrite_downloads, True)
+
+        segmentor = EdfSegmentor()
+        # current_blocks_dir = f'{blocks_dir}/{block_duration}_seconds'
+        target_blocks_dir = f'{blocks_dir}/{segments_dir_base_name}'
+
+        if os.path.exists(target_blocks_dir):
+            logger.info(f"Директория для блоков {target_blocks_dir} уже существует. Пропускаем обработку.")
+        else:
+            segmentor.split_segment_to_blocks(blocks_dir, segments_dir_base_name, segments_local_path,
+                                              block_duration)
+            logger.info(f"Сегменты сохранены в {target_blocks_dir}.")
+
+        logger.info(f"Начинаем создание HDF5 файла для сегментов {segments_dir_base_name}")
+        hdf5_manager = HDF5Manager(base_dir=hdf5_dir)
+        process_blocks(
+            blocks_folder_path=target_blocks_dir,
+            mapping_csv=config["targets"]["mapping_csv"],
+            hdf5_manager=hdf5_manager,
+        )
+
+        logger.info(
+            f"Обработано/просмотрено {ops_count} из {total_dirs} директорий с сегментами, осталось {total_dirs - ops_count}"
+        )
+
+    # hdf5_manager = HDF5Manager(base_dir="temp/download_upload/hdf5_output")
+
+    # process_subblocks(
+    #     subblocks_dir="temp/preprocessing/output_blocks",
+    #     mapping_csv="info_data/original/mapping.csv",
+    #     hdf5_manager=hdf5_manager,
+    # )
 
     # segmentor = EdfSegmentor()
     # blocks_dir_path = segmentor.split_segment_to_blocks(seg_config["blocks_dir"], base_filename,
@@ -227,5 +284,5 @@ def main(action):
 
 
 if __name__ == "__main__":
-    main("process_edfs")
-    # main("prepare_dataset")
+    # main("process_edfs")
+    main("prepare_dataset")

@@ -192,7 +192,7 @@ class SynologyAPI:
             raise ValueError('Не удалось декодировать JSON-ответ от сервера')
 
     @requires_auth
-    def download_file(self, remote_filepath: str, output_dir: str, overwrite: bool = False) -> str:
+    def download_file(self, remote_filepath: str, output_dir: str, overwrite: bool = False, create_parents: bool = False) -> str:
         """
         Скачивает файл из хранилища Synology (remote_path) и сохраняет его локально (local_path).
         Требует авторизации (наличия валидного _sid).
@@ -215,12 +215,15 @@ class SynologyAPI:
         if remote_filepath not in remote_files:
             raise FileNotFoundError(f'Файл \'{remote_filepath}\' не найден в хранилище Synology')
 
-        if not os.path.isdir(output_dir):
+        if not os.path.isdir(output_dir) and not create_parents:
             raise FileNotFoundError(f'Целевая локальная директория \'{output_dir}\' не существует.')
 
         if os.path.isfile(output_path) and not overwrite:
             logger.info(f'Файл {filename} уже существует в указанной директории, отмена загрузки')
             return output_path
+
+        if create_parents:
+            os.makedirs(output_dir, exist_ok=True)
 
         url = f'{self._base_url}/webapi/entry.cgi'
         params = {
@@ -374,7 +377,7 @@ class SynologyAPI:
         # Затем проверяем существование файла. Если он есть, а overwrite = False - ошибка
         if full_remote_path in files_list and not overwrite:
             logger.warning(f'Файл {filename} уже существует в директории {remote_dir_path}. Загрузка отменена.'
-                  f'Для перезаписи существующих файлов укажите overwrite=True')
+                           f'Для перезаписи существующих файлов укажите overwrite=True')
             return False
 
         if not os.path.isfile(local_file_path):
@@ -431,3 +434,13 @@ class SynologyAPI:
             for file in files:
                 local_file = os.path.join(root, file)
                 self.upload_file(local_file, remote_folder_path, create_parents, overwrite)
+
+    @requires_auth
+    def download_folder(self, local_output_dir_path: str, remote_folder_path: str,
+                        overwrite: bool = False, create_parent: bool = False) -> bool:
+        target_files = self.get_files_list(remote_folder_path, FileListMode.SHORT)
+        logger.info(f'В удалённой директории {remote_folder_path} найдено {len(target_files)} файлов')
+        logger.info(f'Загрузка начата')
+        for target_file in target_files:
+            self.download_file(target_file, local_output_dir_path, overwrite, create_parent)
+        logger.info(f'Загрузка завершена')
