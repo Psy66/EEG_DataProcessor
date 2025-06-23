@@ -17,6 +17,9 @@ __pycache__/
 /temp/download_upload/hdf5_output/*
 !/temp/download_upload/hdf5_output/.gitkeep
 
+/temp/preprocessing/hdf5_output/*
+!/temp/preprocessing/hdf5_output/.gitkeep
+
 /temp/preprocessing/cleaned_edf/*
 !/temp/preprocessing/cleaned_edf/.gitkeep
 

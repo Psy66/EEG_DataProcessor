@@ -17,13 +17,13 @@ import mne
 import warnings
 
 mne.set_log_level('ERROR')
-warnings.filterwarnings("ignore", category=RuntimeWarning)
+warnings.filterwarnings('ignore', category=RuntimeWarning)
 
-config_path = "./config.yaml"
+config_path = './config.yaml'
 
 
 def get_config():
-    with open(config_path, "r", encoding="utf-8") as file:
+    with open(config_path, 'r', encoding='utf-8') as file:
         return yaml.safe_load(file)
 
 
@@ -31,15 +31,15 @@ def setup_logger():
     config = get_config()
     logs_dir = config['logging']['logs_dir']
 
-    log_filename = datetime.now().strftime(f"{logs_dir}/log_%Y-%m-%d__%H-%M-%S.log")
+    log_filename = datetime.now().strftime(f'{logs_dir}/log_%Y-%m-%d__%H-%M-%S.log')
 
     # Настройка логгера
     logging.basicConfig(
         level=logging.INFO,
-        format="[%(asctime)s] %(levelname)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+        format='[%(asctime)s] %(levelname)s: %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
         handlers=[
-            logging.FileHandler(log_filename, encoding="utf-8"),
+            logging.FileHandler(log_filename, encoding='utf-8'),
             logging.StreamHandler()
         ]
     )
@@ -50,7 +50,7 @@ def setup_logger():
         if issubclass(exc_type, KeyboardInterrupt):
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
             return
-        logger.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+        logger.critical('Uncaught exception', exc_info=(exc_type, exc_value, exc_traceback))
 
     sys.excepthook = handle_exception
 
@@ -61,34 +61,33 @@ logger = setup_logger()
 
 
 def download_and_validate_target_file(api, target, download_dir, overwrite):
-    remote_path = target["file_path"]
-    filename = target["file_name"]
-    expected_sha256 = target["file_checksum"]
+    remote_path = target['file_path']
+    filename = target['file_name']
+    expected_sha256 = target['file_checksum']
     local_path = f'{download_dir}/{filename}'
 
     if os.path.exists(local_path) and not overwrite:
-        logger.info(f"Файл {filename} уже существует, пропускаем загрузку.")
-        return local_path, True
-
-    local_path = api.download_file(remote_path, download_dir, overwrite=overwrite)
+        logger.info(f'Файл {filename} уже существует, пропускаем загрузку.')
+    else:
+        local_path = api.download_file(remote_path, download_dir, overwrite=overwrite)
 
     actual_sha256 = get_sha256(local_path)
 
     if actual_sha256 != expected_sha256:
-        logger.warning(f"Контрольная сумма не совпадает: {filename}. Удаление.")
+        logger.warning(f'Контрольная сумма не совпадает: {filename}. Удаление.')
         os.remove(local_path)
         return None, False
 
-    logger.info(f"Файл {filename} успешно проверен на целостность.")
+    logger.info(f'Файл {filename} успешно проверен на целостность.')
     return local_path, True
 
 
 def process_single_target(config, target, synology_api, edf_preprocessor):
-    filename = target["file_name"]
+    filename = target['file_name']
     base_filename = filename.replace('.edf', '')
 
-    seg_config = config["segmentation"]
-    storage_config = config["storage"]
+    seg_config = config['segmentation']
+    storage_config = config['storage']
 
     edf_download_dir = seg_config['edf_dir']
     overwrite_on_download = storage_config['overwrite_downloads']
@@ -106,10 +105,10 @@ def process_single_target(config, target, synology_api, edf_preprocessor):
     logger.info(f'Начинаем сегментацию файла {filename}')
     segmentor = EdfSegmentor()
 
-    segments_csv_path = segmentor.create_segment_csv(edf_download_dir, filename, seg_config["csv_dir"])
+    segments_csv_path = segmentor.create_segment_csv(edf_download_dir, filename, seg_config['csv_dir'])
     segments_dir_path = segmentor.split_edf_to_segments(segments_csv_path,
                                                         f'{seg_config['cleaned_edf']}/{filename}',
-                                                        seg_config["segments_dir"],
+                                                        seg_config['segments_dir'],
                                                         base_filename)
     logger.info(f'Сегментация файла {filename} завершена')
 
@@ -156,14 +155,14 @@ def process_edfs(config):
     processed_files = synology_api.get_files_list(config['storage']['output_path'], FileListMode.DIR)
     unprocessed_files = [
         target for _, target in targets.iterrows()
-        if f'{config["storage"]["output_path"]}/{target["file_name"].replace(".edf", "")}' not in processed_files
+        if f'{config['storage']['output_path']}/{target['file_name'].replace('.edf', '')}' not in processed_files
     ]
 
     processed_files_len = len(processed_files)
     unprocessed_files_len = len(unprocessed_files)
 
     logger.info(
-        f"На данный момент обработано {processed_files_len} из {targets_len} записей, осталось {unprocessed_files_len}"
+        f'На данный момент обработано {processed_files_len} из {targets_len} записей, осталось {unprocessed_files_len}'
     )
 
     ops_limit = 5  # Временно ограничим для отладки
@@ -173,29 +172,29 @@ def process_edfs(config):
             break
         ops_count += 1
 
-        target_file_in_storage = f'{config['storage']['input_path']}/{target["file_name"]}'
+        target_file_in_storage = f'{config['storage']['input_path']}/{target['file_name']}'
         if target_file_in_storage not in total_storage_files_short:
             logger.info(
-                f'Файл {target["file_name"]} не найден по ожидаемому пути {target_file_in_storage}. Обработка пропущена.')
+                f'Файл {target['file_name']} не найден по ожидаемому пути {target_file_in_storage}. Обработка пропущена.')
             continue
 
-        storage_dir_path = f'{config['storage']['output_path']}/{target["file_name"].replace('.edf', '')}'
+        storage_dir_path = f'{config['storage']['output_path']}/{target['file_name'].replace('.edf', '')}'
         if storage_dir_path in processed_files:
             logger.info(
-                f'Файл {target["file_name"]} уже имеет директорию в хранилище {storage_dir_path}. Обработка пропущена.')
+                f'Файл {target['file_name']} уже имеет директорию в хранилище {storage_dir_path}. Обработка пропущена.')
             continue
 
         conf_proc = config['processing']
         file_size_mb = get_file_size_mb(total_storage_files_full, target['file_name'])
         if conf_proc['limit_file_size'] and file_size_mb > conf_proc['file_size_limit_mb']:
             logger.info(
-                f'Размер файла {target["file_name"]} ({file_size_mb} MB) превышает установленный лимит {conf_proc['file_size_limit_mb']} MB. Обработка пропущена.')
+                f'Размер файла {target['file_name']} ({file_size_mb} MB) превышает установленный лимит {conf_proc['file_size_limit_mb']} MB. Обработка пропущена.')
             continue
 
         process_single_target(config, target, synology_api, edf_preprocessor)
 
         logger.info(
-            f"Обработано/просмотрено {processed_files_len + ops_count} из {targets_len} записей, осталось {unprocessed_files_len - ops_count}"
+            f'Обработано/просмотрено {processed_files_len + ops_count} из {targets_len} записей, осталось {unprocessed_files_len - ops_count}'
         )
 
     logger.info('Обработка и загрузка сегментов завершена!')
@@ -212,7 +211,16 @@ def prepare_dataset(config):
     segments_dir = seg_config['segments_dir']
     blocks_dir = seg_config['blocks_dir']
     block_duration = seg_config['block_duration']
-    hdf5_dir = seg_config['hdf5_dir']
+    hdf5_dir = f'{seg_config['hdf5_dir']}/{block_duration}_seconds'
+    log_file_path = f'{seg_config['hdf5_dir']}/{block_duration}_seconds/processing.log'
+
+    os.makedirs(hdf5_dir, exist_ok=True)
+    if not os.path.exists(log_file_path):
+        with open(log_file_path, "w") as f:
+            pass  # создаём пустой лог-файл в случае его отсутствия
+
+    with open(log_file_path, "r") as f:
+        processed_dirs = set(line.strip() for line in f if line.strip())
 
     remote_target_paths = synology_api.get_files_list(output_path, FileListMode.DIR)
     total_dirs = len(remote_target_paths)
@@ -230,8 +238,12 @@ def prepare_dataset(config):
         segments_dir_base_name = os.path.basename(remote_target_path)
         segments_local_path = f'{segments_dir}/{segments_dir_base_name}'
 
+        if segments_dir_base_name in processed_dirs:
+            logger.info(f'Директория {segments_dir_base_name} согласно лог файлу уже обработана. Пропускаем.')
+            continue
+
         if os.path.exists(segments_local_path):
-            logger.info(f"Директория {segments_local_path} уже существует локально. Пропускаем скачивание.")
+            logger.info(f'Директория {segments_local_path} уже существует локально. Пропускаем скачивание.')
         else:
             synology_api.download_folder(segments_local_path, remote_target_path,
                                          overwrite_downloads, True)
@@ -241,48 +253,73 @@ def prepare_dataset(config):
         target_blocks_dir = f'{blocks_dir}/{segments_dir_base_name}'
 
         if os.path.exists(target_blocks_dir):
-            logger.info(f"Директория для блоков {target_blocks_dir} уже существует. Пропускаем обработку.")
+            logger.info(f'Директория для блоков {target_blocks_dir} уже существует. Пропускаем обработку.')
         else:
             segmentor.split_segment_to_blocks(blocks_dir, segments_dir_base_name, segments_local_path,
                                               block_duration)
-            logger.info(f"Сегменты сохранены в {target_blocks_dir}.")
+            logger.info(f'Блоки сохранены в {target_blocks_dir}.')
 
-        logger.info(f"Начинаем создание HDF5 файла для сегментов {segments_dir_base_name}")
+        logger.info(f'Начинаем создание HDF5 файла для сегментов {segments_dir_base_name}')
+
         hdf5_manager = HDF5Manager(base_dir=hdf5_dir)
         process_blocks(
             blocks_folder_path=target_blocks_dir,
-            mapping_csv=config["targets"]["mapping_csv"],
+            mapping_csv=config['targets']['mapping_csv'],
             hdf5_manager=hdf5_manager,
         )
 
+        logger.info(f'HDF5 файл для сегментов {segments_dir_base_name} успешно создан')
+
+        logger.info(f'Очищаем служебные файлы')
+
+        # Удаляем сегменты
+        # Удаляем блоки
+        shutil.rmtree(segments_local_path)
+        shutil.rmtree(target_blocks_dir)
+
+        with open(log_file_path, "a") as f:
+            f.write(f"{segments_dir_base_name}\n")
+
+        logger.info(f'Служебные файлы очищены. Обработка {segments_dir_base_name} завершена')
+
         logger.info(
-            f"Обработано/просмотрено {ops_count} из {total_dirs} директорий с сегментами, осталось {total_dirs - ops_count}"
+            f'Обработано/просмотрено {ops_count} из {total_dirs} директорий с сегментами, осталось {total_dirs - ops_count}'
         )
-
-    # hdf5_manager = HDF5Manager(base_dir="temp/download_upload/hdf5_output")
-
-    # process_subblocks(
-    #     subblocks_dir="temp/preprocessing/output_blocks",
-    #     mapping_csv="info_data/original/mapping.csv",
-    #     hdf5_manager=hdf5_manager,
-    # )
-
-    # segmentor = EdfSegmentor()
-    # blocks_dir_path = segmentor.split_segment_to_blocks(seg_config["blocks_dir"], base_filename,
-    #                                                     segments_dir_path, seg_config["block_duration"])
 
 
 def main(action):
     config = get_config()
 
-    if action == "process_edfs":
+    if action == 'process_edfs':
         process_edfs(config)
-    elif action == "prepare_dataset":
+    elif action == 'prepare_dataset':
         prepare_dataset(config)
     else:
-        print("Несуществующая функция")
+        print('Несуществующая функция')
 
 
-if __name__ == "__main__":
-    # main("process_edfs")
-    main("prepare_dataset")
+if __name__ == '__main__':
+    while True:
+        print('Выберите режим работы:')
+        print('1 - process_edfs; обработка .edf файлов, разбиение на сегменты')
+        print('2 - prepare_dataset; разбиение сегментов на блоки, сохранение блоков в HDF5 файл')
+        print('exit - выход')
+        choice = input('Введите номер режима: ').strip()
+
+        if choice == '1':
+            mode = 'process_edfs'
+        elif choice == '2':
+            mode = 'prepare_dataset'
+        elif choice == 'exit':
+            print('Завершение работы')
+            break
+        else:
+            print('Некорректный ввод. Попробуйте снова.\n')
+            continue
+
+        confirm = input(f'Вы выбрали режим \'{mode}\'. Подтвердить? (Y/N): ').strip().lower()
+        if confirm in ('yes', 'y'):
+            main(mode)
+            break
+        else:
+            print('Выбор отменён. Попробуйте снова.\n')
